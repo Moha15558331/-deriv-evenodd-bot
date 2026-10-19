@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deriv Even/Odd Auto-Scan Bot</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2e3a;
+      --text: #e6e8ef;
+      --muted: #9aa0b4;
+      --accent: #00d1b2;
+      --accent2: #7c5cff;
+      --danger: #ff5c7a;
+      --success: #3dd68c;
+      --warn: #ffc857;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    }
+    h1 {
+      font-size: 1.45rem; font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 0.9rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 14px;
+    }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
+    }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+    input, select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 0.95rem;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 20px; border: none; border-radius: 8px;
+      font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.15s;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #00b89c); color: #041510; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.88rem; }
+    .status-item span { color: var(--muted); margin-right: 5px; }
+    .status-item strong { font-variant-numeric: tabular-nums; }
+    .green { color: var(--success); } .red { color: var(--danger); } .yellow { color: var(--warn); }
+    #log {
+      height: 260px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.78rem; background: #0a0c12; border-radius: 8px; padding: 12px;
+      border: 1px solid var(--border);
+    }
+    .log-line { margin-bottom: 3px; }
+    .log-info { color: var(--muted); } .log-success { color: var(--success); }
+    .log-error { color: var(--danger); } .log-trade { color: var(--accent); }
+    .log-warn { color: var(--warn); }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-connected { background: rgba(61,214,140,0.15); color: var(--success); }
+    .badge-disconnected { background: rgba(255,92,122,0.15); color: var(--danger); }
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .market-table {
+      width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px;
+    }
+    .market-table th, .market-table td {
+      padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .market-table th { color: var(--muted); font-weight: 500; }
+    .market-table tr.active { background: rgba(0,209,178,0.08); }
+    .market-table .good { color: var(--success); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Deriv Even/Odd Auto-Scan Bot</h1>
+      <div id="authStatus"><span class="badge badge-disconnected">Not connected</span></div>
+    </header>
+
+    <!-- Connection -->
+    <div class="card">
+      <h2>Account Connection</h2>
+      <p class="hint" style="margin-bottom:12px">
+        1. Create app at <a href="https://api.deriv.com/app-registration" target="_blank" style="color:var(--accent)">api.deriv.com</a><br>
+        2. Set Redirect URL to your GitHub Pages URL<br>
+        3. Paste App ID below → Connect Account
+      </p>
+      <div class="grid">
+        <div>
+          <label>Your Deriv App ID</label>
+          <input type="text" id="appId" value="1089" placeholder="Your App ID" />
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnConnect" onclick="connectAccount()">Connect Account</button>
+        <button class="btn btn-secondary" id="btnDisconnect" onclick="disconnect()" disabled>Disconnect</button>
+      </div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="card">
+      <h2>Strategy Parameters</h2>
+      <div class="grid">
+        <div>
+          <label>Base Stake ($)</label>
+          <input type="number" id="baseStake" value="0.5" min="0.35" step="0.01" />
+        </div>
+        <div>
+          <label>Martingale Multiplier</label>
+          <input type="number" id="martingale" value="2.1" min="1.1" step="0.1" />
+        </div>
+        <div>
+          <label>Take Profit ($)</label>
+          <input type="number" id="tp" value="1.5" min="0.5" step="0.1" />
+        </div>
+        <div>
+          <label>Stop Loss ($)</label>
+          <input type="number" id="sl" value="2.0" min="0.5" step="0.1" />
+        </div>
+        <div>
+          <label>Duration (ticks)</label>
+          <input type="number" id="duration" value="1" min="1" max="10" />
+        </div>
+        <div>
+          <label>Max Trades / Session</label>
+          <input type="number" id="maxTrades" value="15" min="1" max="50" />
+        </div>
+        <div>
+          <label>Min Strength % (25-tick)</label>
+          <input type="number" id="minStrength" value="60" min="50" max="90" />
+        </div>
+      </div>
+      <p class="hint">
+        Bot automatically scans <strong>all</strong> major digit markets and trades only the best hierarchy + reverse signal.
+      </p>
+    </div>
+
+    <!-- Live Status -->
+    <div class="card">
+      <h2>Live Status</h2>
+      <div class="status-bar">
+        <div class="status-item"><span>Balance</span><strong id="bal">—</strong></div>
+        <div class="status-item"><span>Session PnL</span><strong id="sessionPnl">$0.00</strong></div>
+        <div class="status-item"><span>Current Stake</span><strong id="curStake">$0.50</strong></div>
+        <div class="status-item"><span>Trades</span><strong id="tradeCount">0</strong></div>
+        <div class="status-item"><span>Best Market</span><strong id="bestMarket">Scanning…</strong></div>
+        <div class="status-item"><span>Active Signal</span><strong id="activeSignal">—</strong></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnStart" onclick="startBot()" disabled>Start Bot</button>
+        <button class="btn btn-danger" id="btnStop" onclick="stopBot()" disabled>Stop Bot</button>
+      </div>
+    </div>
+
+    <!-- Market Scan Table -->
+    <div class="card">
+      <h2>Market Scan (Auto)</h2>
+      <table class="market-table" id="marketTable">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Ticks</th>
+            <th>25-tick Bias</th>
+            <th>Hierarchy</th>
+            <th>Strength</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="marketBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <h2>Execution Log</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+
+<script>
+/* ============================================================
+   Deriv Even/Odd Auto-Scan Hierarchy Bot
+   Scans ALL major digit markets and trades the best signal
+   ============================================================ */
+
+const ALL_SYMBOLS = [
+  'R_10', 'R_25', 'R_50', 'R_75', 'R_100',
+  '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V',
+  'JD10', 'JD25', 'JD50', 'JD75', 'JD100'
+];
+
+const WINDOWS = [1000, 500, 250, 125, 75, 55, 25];
+const MAX_HISTORY = 1200;
+
+let ws = null;
+let token = null;
+let authorized = false;
+let running = false;
+let balance = 0;
+let currency = 'USD';
+
+// Per-symbol state
+const marketData = {};          // symbol → { digits: [], lastDigit, analysis }
+ALL_SYMBOLS.forEach(s => {
+  marketData[s] = { digits: [], lastDigit: null, analysis: null };
+});
+
+// Session state
+let sessionPnl = 0;
+let currentStake = 0.5;
+let tradeCount = 0;
+let pendingContract = false;
+let lastTradedSymbol = null;
+
+// ---------- Logging ----------
+function log(msg, type = 'info') {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = `log-line log-${type}`;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------- OAuth ----------
+function connectAccount() {
+  const appId = document.getElementById('appId').value.trim() || '1089';
+  localStorage.setItem('deriv_app_id', appId);
+  window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=${appId}&l=en&brand=deriv`;
+}
+
+function parseTokenFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  let t = params.get('token1') || hashParams.get('token1');
+  if (t) {
+    token = t;
+    localStorage.setItem('deriv_token', t);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return true;
+  }
+  t = localStorage.getItem('deriv_token');
+  if (t) { token = t; return true; }
+  return false;
+}
+
+function disconnect() {
+  stopBot();
+  if (ws) { try { ws.close(); } catch(e){} ws = null; }
+  token = null; authorized = false;
+  localStorage.removeItem('deriv_token');
+  document.getElementById('authStatus').innerHTML = '<span class="badge badge-disconnected">Not connected</span>';
+  document.getElementById('btnConnect').disabled = false;
+  document.getElementById('btnDisconnect').disabled = true;
+  document.getElementById('btnStart').disabled = true;
+  log('Disconnected', 'warn');
+}
+
+// ---------- WebSocket ----------
+function connectWS() {
+  const appId = localStorage.getItem('deriv_app_id') || document.getElementById('appId').value || '1089';
+  if (ws) { try { ws.close(); } catch(e){} }
+
+  ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+
+  ws.onopen = () => {
+    log('WebSocket connected', 'success');
+    send({ authorize: token });
+  };
+
+  ws.onmessage = (evt) => {
+    try {
+      const data = JSON.parse(evt.data);
+      handleMessage(data);
+    } catch (e) { console.error(e); }
+  };
+
+  ws.onerror = () => log('WebSocket error', 'error');
+  ws.onclose = () => {
+    log('WebSocket closed', 'warn');
+    authorized = false;
+    if (running && token) setTimeout(connectWS, 2000);
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+// ---------- Message Handler ----------
+function handleMessage(data) {
+  if (data.error) {
+    log(`API Error: ${data.error.message}`, 'error');
+    if (data.error.code === 'InvalidToken') disconnect();
+    return;
+  }
+
+  switch (data.msg_type) {
+    case 'authorize':
+      authorized = true;
+      balance = data.authorize.balance;
+      currency = data.authorize.currency;
+      document.getElementById('bal').textContent = `${balance.toFixed(2)} ${currency}`;
+      document.getElementById('authStatus').innerHTML =
+        `<span class="badge badge-connected">Connected (${data.authorize.loginid})</span>`;
+      document.getElementById('btnConnect').disabled = true;
+      document.getElementById('btnDisconnect').disabled = false;
+      document.getElementById('btnStart').disabled = false;
+      log(`Authorized | Balance: ${balance} ${currency}`, 'success');
+
+      // Subscribe to ALL symbols at once
+      ALL_SYMBOLS.forEach(sym => {
+        send({ ticks: sym, subscribe: 1 });
+      });
+      log(`Subscribed to ${ALL_SYMBOLS.length} markets – scanning…`, 'info');
+      break;
+
+    case 'tick':
+      onTick(data.tick);
+      break;
+
+    case 'proposal':
+      if (data.proposal && running && !pendingContract) {
+        send({ buy: data.proposal.id, price: data.proposal.ask_price });
+        pendingContract = true;
+      }
+      break;
+
+    case 'buy':
+      if (data.buy) {
+        log(`BOUGHT ${lastTradedSymbol} → ${data.buy.contract_id} | Stake $${currentStake.toFixed(2)}`, 'trade');
+        send({
+          proposal_open_contract: 1,
+          contract_id: data.buy.contract_id,
+          subscribe: 1
+        });
+      }
+      break;
+
+    case 'proposal_open_contract':
+      if (data.proposal_open_contract && data.proposal_open_contract.is_sold) {
+        const poc = data.proposal_open_contract;
+        const profit = parseFloat(poc.profit);
+        sessionPnl += profit;
+        tradeCount++;
+
+        if (profit >= 0) {
+          log(`WIN +${profit.toFixed(2)} on ${lastTradedSymbol} | Session: ${sessionPnl.toFixed(2)}`, 'success');
+          currentStake = parseFloat(document.getElementById('baseStake').value);
+        } else {
+          log(`LOSS ${profit.toFixed(2)} on ${lastTradedSymbol} | Session: ${sessionPnl.toFixed(2)}`, 'error');
+          currentStake = +(currentStake * parseFloat(document.getElementById('martingale').value)).toFixed(2);
+        }
+
+        updateUI();
+        pendingContract = false;
+
+        const tp = parseFloat(document.getElementById('tp').value);
+        const sl = parseFloat(document.getElementById('sl').value);
+        const maxT = parseInt(document.getElementById('maxTrades').value);
+
+        if (sessionPnl >= tp) {
+          log(`🎉 TAKE PROFIT (+${sessionPnl.toFixed(2)}). Session stopped.`, 'success');
+          stopBot();
+        } else if (sessionPnl <= -sl) {
+          log(`🛑 STOP LOSS (${sessionPnl.toFixed(2)}). Session stopped.`, 'error');
+          stopBot();
+        } else if (tradeCount >= maxT) {
+          log(`Max trades (${maxT}) reached. Session stopped.`, 'warn');
+          stopBot();
+        }
+      }
+      break;
+
+    case 'balance':
+      if (data.balance) {
+        balance = data.balance.balance;
+        document.getElementById('bal').textContent = `${balance.toFixed(2)} ${currency}`;
+      }
+      break;
+  }
+}
+
+// ---------- Tick Processing ----------
+function onTick(tick) {
+  if (!tick || !tick.symbol || tick.quote === undefined) return;
+  const symbol = tick.symbol;
+  if (!marketData[symbol]) return;
+
+  // Extract last digit
+  const quote = tick.quote.toString();
+  const pip = tick.pip_size || 2;
+  const parts = quote.split('.');
+  let digit;
+  if (parts.length === 1) digit = parseInt(parts[0].slice(-1));
+  else {
+    const decimals = parts[1].padEnd(pip, '0').slice(0, pip);
+    digit = parseInt(decimals.slice(-1));
+  }
+
+  const md = marketData[symbol];
+  md.digits.push(digit);
+  if (md.digits.length > MAX_HISTORY) md.digits.shift();
+  md.lastDigit = digit;
+
+  // Analyse this market
+  md.analysis = analyseMarket(symbol);
+
+  // Update table periodically (not every tick to keep UI smooth)
+  if (Math.random() < 0.15) renderMarketTable();
+
+  // Trading decision
+  if (running && !pendingContract) {
+    const best = findBestSignal();
+    if (best) {
+      placeTrade(best.symbol, best.side);
+    }
+  }
+}
+
+function analyseMarket(symbol) {
+  const digits = marketData[symbol].digits;
+  const result = {
+    ticks: digits.length,
+    bias25: '—',
+    hierarchy: '—',
+    strength: 0,
+    ready: false,
+    side: null,
+    score: 0
+  };
+
+  if (digits.length < 1000) {
+    result.hierarchy = `Need ${1000 - digits.length} more`;
+    return result;
+  }
+
+  const minStrength = parseFloat(document.getElementById('minStrength').value) / 100;
+  const dominants = [];
+
+  for (const w of WINDOWS) {
+    const slice = digits.slice(-w);
+    const even = slice.filter(d => d % 2 === 0).length;
+    const pct = even / w;
+    if (pct > 0.5) dominants.push('EVEN');
+    else if (pct < 0.5) dominants.push('ODD');
+    else dominants.push('TIE');
+  }
+
+  // 25-tick
+  const s25 = digits.slice(-25);
+  const even25 = s25.filter(d => d % 2 === 0).length;
+  const pctEven25 = even25 / 25;
+  result.strength = Math.max(pctEven25, 1 - pctEven25);
+  result.bias25 = (pctEven25 > 0.5 ? 'EVEN' : 'ODD') + ` ${(result.strength * 100).toFixed(0)}%`;
+
+  const unique = [...new Set(dominants.filter(d => d !== 'TIE'))];
+  if (unique.length === 1 && result.strength >= minStrength) {
+    result.hierarchy = unique[0] + ' ✓';
+    result.side = unique[0] === 'EVEN' ? 'DIGITODD' : 'DIGITEVEN';
+    result.ready = true;
+    // Score = strength (higher is better)
+    result.score = result.strength;
+  } else {
+    result.hierarchy = unique.length === 1 ? unique[0] + ' (weak)' : 'No hierarchy';
+  }
+
+  return result;
+}
+
+function findBestSignal() {
+  // Only consider markets that have FULL hierarchy (same side on every window)
+  // and meet the minimum strength. Then pick the SINGLE strongest one.
+  let best = null;
+  for (const sym of ALL_SYMBOLS) {
+    const a = marketData[sym].analysis;
+    if (a && a.ready && a.score > 0) {
+      if (!best || a.score > best.score) {
+        best = { symbol: sym, side: a.side, score: a.score, strength: a.strength };
+      }
+    }
+  }
+  // Extra safety: only return if strength is clearly the strongest available
+  return best;
+}
+
+// ---------- Place Trade ----------
+function placeTrade(symbol, contractType) {
+  if (pendingContract || !running) return;
+
+  const stake = currentStake;
+  if (stake > balance * 0.95) {
+    log('Stake too high vs balance – skipping', 'warn');
+    return;
+  }
+
+  lastTradedSymbol = symbol;
+  const duration = parseInt(document.getElementById('duration').value);
+
+  document.getElementById('activeSignal').textContent = `${symbol} → ${contractType}`;
+  document.getElementById('bestMarket').textContent = symbol;
+
+  log(`SIGNAL ${symbol} → ${contractType} | Stake $${stake.toFixed(2)} | Strength ${(marketData[symbol].analysis.strength*100).toFixed(0)}%`, 'trade');
+
+  send({
+    proposal: 1,
+    amount: stake,
+    basis: 'stake',
+    contract_type: contractType,
+    currency: currency,
+    duration: duration,
+    duration_unit: 't',
+    symbol: symbol
+  });
+}
+
+// ---------- UI Table ----------
+function renderMarketTable() {
+  const tbody = document.getElementById('marketBody');
+  let html = '';
+  let bestSym = null;
+  let bestScore = 0;
+
+  for (const sym of ALL_SYMBOLS) {
+    const a = marketData[sym].analysis || { ticks: 0, bias25: '—', hierarchy: '—', strength: 0, ready: false };
+    if (a.ready && a.score > bestScore) {
+      bestScore = a.score;
+      bestSym = sym;
+    }
+  }
+
+  for (const sym of ALL_SYMBOLS) {
+    const a = marketData[sym].analysis || { ticks: 0, bias25: '—', hierarchy: '—', strength: 0, ready: false };
+    const isBest = (sym === bestSym);
+    const status = a.ready ? '<span class="good">READY</span>' : (a.ticks < 1000 ? 'Collecting…' : 'Waiting');
+    html += `<tr class="${isBest ? 'active' : ''}">
+      <td>${sym}</td>
+      <td>${a.ticks}</td>
+      <td>${a.bias25}</td>
+      <td>${a.hierarchy}</td>
+      <td>${a.ready ? (a.strength*100).toFixed(0)+'%' : '—'}</td>
+      <td>${status}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+
+  if (bestSym) {
+    document.getElementById('bestMarket').textContent = bestSym;
+  }
+}
+
+// ---------- Bot Control ----------
+function startBot() {
+  if (!authorized) { log('Connect account first', 'error'); return; }
+  sessionPnl = 0;
+  tradeCount = 0;
+  currentStake = parseFloat(document.getElementById('baseStake').value);
+  pendingContract = false;
+  running = true;
+
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+  send({ balance: 1, subscribe: 1 });
+  updateUI();
+  log('▶ Bot started – auto-scanning all markets for hierarchy + reverse signal', 'success');
+}
+
+function stopBot() {
+  running = false;
+  pendingContract = false;
+  document.getElementById('btnStart').disabled = !authorized;
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('activeSignal').textContent = '—';
+  log('⏹ Bot stopped', 'warn');
+}
+
+function updateUI() {
+  document.getElementById('sessionPnl').textContent = `$${sessionPnl.toFixed(2)}`;
+  document.getElementById('sessionPnl').className = sessionPnl >= 0 ? 'green' : 'red';
+  document.getElementById('curStake').textContent = `$${currentStake.toFixed(2)}`;
+  document.getElementById('tradeCount').textContent = tradeCount;
+}
+
+// ---------- Init ----------
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('deriv_app_id');
+  if (saved) document.getElementById('appId').value = saved;
+
+  // Build empty table
+  renderMarketTable();
+
+  if (parseTokenFromUrl()) {
+    log('Token found – connecting…', 'info');
+    connectWS();
+  } else {
+    log('Ready. Click “Connect Account” to link your Deriv demo account.', 'info');
+  }
+});
+</script>
+</body>
+</html>
