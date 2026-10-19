@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deriv Even/Odd Auto-Scan Bot (Fixed)</title>
+  <style>
+    :root {
+      --bg: #0f1117; --card: #1a1d27; --border: #2a2e3a; --text: #e6e8ef;
+      --muted: #9aa0b4; --accent: #00d1b2; --accent2: #7c5cff;
+      --danger: #ff5c7a; --success: #3dd68c; --warn: #ffc857;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.5;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+    }
+    h1 {
+      font-size: 1.4rem; font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; margin-bottom: 18px;
+    }
+    .card h2 {
+      font-size: 0.9rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.05em; margin-bottom: 14px;
+    }
+    .grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;
+    }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+    input, select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 0.95rem;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 11px 20px; border: none; border-radius: 8px;
+      font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: all 0.15s;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #00b89c); color: #041510; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.88rem; }
+    .status-item span { color: var(--muted); margin-right: 5px; }
+    .status-item strong { font-variant-numeric: tabular-nums; }
+    .green { color: var(--success); } .red { color: var(--danger); }
+    #log {
+      height: 280px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 0.78rem; background: #0a0c12; border-radius: 8px; padding: 12px;
+      border: 1px solid var(--border);
+    }
+    .log-line { margin-bottom: 3px; }
+    .log-info { color: var(--muted); } .log-success { color: var(--success); }
+    .log-error { color: var(--danger); } .log-trade { color: var(--accent); }
+    .log-warn { color: var(--warn); }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-connected { background: rgba(61,214,140,0.15); color: var(--success); }
+    .badge-disconnected { background: rgba(255,92,122,0.15); color: var(--danger); }
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .market-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px; }
+    .market-table th, .market-table td {
+      padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border);
+    }
+    .market-table th { color: var(--muted); font-weight: 500; }
+    .market-table tr.active { background: rgba(0,209,178,0.08); }
+    .market-table .good { color: var(--success); font-weight: 600; }
+    .warn-box {
+      background: rgba(255,200,87,0.1); border: 1px solid rgba(255,200,87,0.3);
+      color: var(--warn); padding: 10px 12px; border-radius: 8px; font-size: 0.8rem;
+      margin-bottom: 12px; line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Deriv Even/Odd Auto-Scan Bot (Fixed)</h1>
+      <div id="authStatus"><span class="badge badge-disconnected">Not connected</span></div>
+    </header>
+
+    <div class="card">
+      <h2>Connect with PAT Token (New API)</h2>
+      <div class="warn-box">
+        Uses the <strong>new Deriv API</strong> (PAT + OTP). Same flow as your working Multi-Contract bot.<br>
+        Token scopes needed: <strong>trade</strong> (and ideally account_manage).
+      </div>
+      <div class="grid">
+        <div style="grid-column: 1 / -1;">
+          <label>Your Deriv PAT Token</label>
+          <input type="password" id="apiToken" placeholder="pat_xxxx" autocomplete="off" />
+        </div>
+        <div>
+          <label>App ID</label>
+          <input type="text" id="appId" value="34ICfs977CxpmvNDBbpHj" />
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnConnect" onclick="connectAccount()">Connect Account</button>
+        <button class="btn btn-secondary" id="btnDisconnect" onclick="disconnect()" disabled>Disconnect</button>
+      </div>
+      <p class="hint" id="connHint">Data feed starts automatically. Connect account to enable trading.</p>
+    </div>
+
+    <div class="card">
+      <h2>Strategy Parameters</h2>
+      <div class="grid">
+        <div><label>Base Stake ($)</label><input type="number" id="baseStake" value="0.5" min="0.35" step="0.01" /></div>
+        <div><label>Martingale Multiplier</label><input type="number" id="martingale" value="2.1" min="1.1" step="0.1" /></div>
+        <div><label>Take Profit ($)</label><input type="number" id="tp" value="1.5" min="0.5" step="0.1" /></div>
+        <div><label>Stop Loss ($)</label><input type="number" id="sl" value="2.0" min="0.5" step="0.1" /></div>
+        <div><label>Duration (ticks)</label><input type="number" id="duration" value="1" min="1" max="10" /></div>
+        <div><label>Max Trades / Session</label><input type="number" id="maxTrades" value="15" min="1" max="50" /></div>
+        <div><label>Min Strength % (25-tick)</label><input type="number" id="minStrength" value="60" min="50" max="90" /></div>
+      </div>
+      <p class="hint">Bot auto-scans all digit markets and only trades the <strong>strongest hierarchy</strong>.</p>
+    </div>
+
+    <div class="card">
+      <h2>Live Status</h2>
+      <div class="status-bar">
+        <div class="status-item"><span>Balance</span><strong id="bal">—</strong></div>
+        <div class="status-item"><span>Session PnL</span><strong id="sessionPnl">$0.00</strong></div>
+        <div class="status-item"><span>Current Stake</span><strong id="curStake">$0.50</strong></div>
+        <div class="status-item"><span>Trades</span><strong id="tradeCount">0</strong></div>
+        <div class="status-item"><span>Best Market</span><strong id="bestMarket">—</strong></div>
+        <div class="status-item"><span>Active Signal</span><strong id="activeSignal">—</strong></div>
+        <div class="status-item"><span>Data</span><strong id="dataStatus">—</strong></div>
+        <div class="status-item"><span>Trade</span><strong id="tradeStatus">Not connected</strong></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnStart" onclick="startBot()" disabled>Start Bot</button>
+        <button class="btn btn-danger" id="btnStop" onclick="stopBot()" disabled>Stop Bot</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Market Scan (Auto)</h2>
+      <table class="market-table">
+        <thead>
+          <tr><th>Symbol</th><th>Ticks</th><th>25-tick Bias</th><th>Hierarchy</th><th>Strength</th><th>Status</th></tr>
+        </thead>
+        <tbody id="marketBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Execution Log</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+
+<script>
+/* ─── Markets & Analysis (same strategy) ─── */
+const ALL_SYMBOLS = [
+  'R_10','R_25','R_50','R_75','R_100',
+  '1HZ10V','1HZ25V','1HZ50V','1HZ75V','1HZ100V',
+  'JD10','JD25','JD50','JD75','JD100'
+];
+const WINDOWS = [1000,500,250,125,75,55,25];
+const MAX_HISTORY = 1200;
+const HIST_REQ = 500;
+
+const DATA_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
+const REST = 'https://api.derivws.com/trading/v1/options';
+
+/* ─── State ─── */
+let dataWs = null, tradeWs = null;
+let token = null, appId = null, authorized = false, running = false;
+let loginId = '', balance = 0, currency = 'USD';
+let rid = 1;
+const marketData = {};
+ALL_SYMBOLS.forEach(s => { marketData[s] = { digits: [], analysis: null }; });
+
+let sessionPnl = 0, currentStake = 0.5, tradeCount = 0;
+let pendingContract = false, lastTradedSymbol = null;
+let openContractId = null;
+let closing = false;
+let dataBackoff = 2000, tradeBackoff = 2000;
+let dataTimer = null, tradeTimer = null;
+
+/* ─── Helpers ─── */
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = `log-line log-${type}`;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setDataStatus(t) {
+  document.getElementById('dataStatus').textContent = t;
+}
+function setTradeStatus(t) {
+  document.getElementById('tradeStatus').textContent = t;
+}
+
+/* ─── Public Data WebSocket ─── */
+function connectData() {
+  clearTimeout(dataTimer);
+  if (dataWs) {
+    try { dataWs.onclose = null; dataWs.close(); } catch(e){}
+    dataWs = null;
+  }
+  setDataStatus('Connecting…');
+  log('Data WS connecting…', 'info');
+
+  try {
+    dataWs = new WebSocket(DATA_URL);
+  } catch (e) {
+    log('Data WS create error: ' + e.message, 'error');
+    scheduleDataReconnect();
+    return;
+  }
+
+  dataWs.onopen = () => {
+    dataBackoff = 2000;
+    setDataStatus('● Live');
+    log('Data WS OPEN – requesting history', 'success');
+    ALL_SYMBOLS.forEach(sym => {
+      dataWs.send(JSON.stringify({
+        ticks_history: sym,
+        adjust_start_time: 1,
+        count: HIST_REQ,
+        end: 'latest',
+        style: 'ticks',
+        req_id: rid++
+      }));
+    });
+  };
+
+  dataWs.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch(e) { return; }
+    if (msg.error) {
+      log('Data err: ' + (msg.error.message || ''), 'error');
+      return;
+    }
+    if (msg.msg_type === 'history') {
+      const sym = msg.echo_req && msg.echo_req.ticks_history;
+      if (!sym || !marketData[sym]) return;
+      const prices = (msg.history && msg.history.prices) || [];
+      prices.forEach(p => {
+        const dig = lastDigitFromPrice(Number(p));
+        if (dig !== null) {
+          marketData[sym].digits.push(dig);
+          if (marketData[sym].digits.length > MAX_HISTORY) marketData[sym].digits.shift();
+        }
+      });
+      marketData[sym].analysis = analyseMarket(sym);
+      try {
+        dataWs.send(JSON.stringify({ ticks: sym, subscribe: 1, req_id: rid++ }));
+      } catch(e){}
+      if (Math.random() < 0.3) renderMarketTable();
+      return;
+    }
+    if (msg.msg_type === 'tick' && msg.tick) {
+      onTick(msg.tick);
+    }
+  };
+
+  dataWs.onerror = () => log('Data WS error', 'error');
+  dataWs.onclose = (ev) => {
+    setDataStatus('Closed');
+    log('Data WS closed ' + (ev.code||'') + ' – reconnecting…', 'warn');
+    if (!closing) scheduleDataReconnect();
+  };
+}
+
+function scheduleDataReconnect() {
+  clearTimeout(dataTimer);
+  const delay = dataBackoff;
+  dataBackoff = Math.min(dataBackoff * 1.6, 20000);
+  setDataStatus('Retry in ' + Math.round(delay/1000) + 's');
+  dataTimer = setTimeout(connectData, delay);
+}
+
+function lastDigitFromPrice(quote) {
+  if (!isFinite(quote)) return null;
+  const s = quote.toString();
+  const parts = s.split('.');
+  if (parts.length === 1) return parseInt(parts[0].slice(-1), 10);
+  // take last digit of the fractional part (handles varying pip sizes)
+  const frac = parts[1].replace(/0+$/, '') || '0';
+  return parseInt(frac.slice(-1), 10);
+}
+
+function onTick(tick) {
+  if (!tick || !tick.symbol) return;
+  const symbol = tick.symbol;
+  if (!marketData[symbol]) return;
+  const quote = Number(tick.quote);
+  const digit = lastDigitFromPrice(quote);
+  if (digit === null) return;
+
+  const md = marketData[symbol];
+  md.digits.push(digit);
+  if (md.digits.length > MAX_HISTORY) md.digits.shift();
+  md.analysis = analyseMarket(symbol);
+
+  if (Math.random() < 0.08) renderMarketTable();
+
+  if (running && !pendingContract && authorized) {
+    const best = findBestSignal();
+    if (best) placeTrade(best.symbol, best.side);
+  }
+}
+
+/* ─── Strategy (unchanged logic) ─── */
+function analyseMarket(symbol) {
+  const digits = marketData[symbol].digits;
+  const result = { ticks: digits.length, bias25: '—', hierarchy: '—', strength: 0, ready: false, side: null, score: 0 };
+  if (digits.length < 1000) {
+    result.hierarchy = `Need ${1000 - digits.length}`;
+    return result;
+  }
+  const minStrength = parseFloat(document.getElementById('minStrength').value) / 100;
+  const dominants = [];
+  for (const w of WINDOWS) {
+    const slice = digits.slice(-w);
+    const even = slice.filter(d => d % 2 === 0).length;
+    const pct = even / w;
+    if (pct > 0.5) dominants.push('EVEN');
+    else if (pct < 0.5) dominants.push('ODD');
+    else dominants.push('TIE');
+  }
+  const s25 = digits.slice(-25);
+  const even25 = s25.filter(d => d % 2 === 0).length;
+  const pctEven25 = even25 / 25;
+  result.strength = Math.max(pctEven25, 1 - pctEven25);
+  result.bias25 = (pctEven25 > 0.5 ? 'EVEN' : 'ODD') + ` ${(result.strength*100).toFixed(0)}%`;
+
+  const unique = [...new Set(dominants.filter(d => d !== 'TIE'))];
+  if (unique.length === 1 && result.strength >= minStrength) {
+    result.hierarchy = unique[0] + ' ✓';
+    // hierarchy EVEN → we trade DIGITODD (contrarian to the long bias? original bot did this)
+    // original: unique[0]==='EVEN' ? 'DIGITODD' : 'DIGITEVEN'
+    result.side = unique[0] === 'EVEN' ? 'DIGITODD' : 'DIGITEVEN';
+    result.ready = true;
+    result.score = result.strength;
+  } else {
+    result.hierarchy = unique.length === 1 ? unique[0] + ' (weak)' : 'No hierarchy';
+  }
+  return result;
+}
+
+function findBestSignal() {
+  let best = null;
+  for (const sym of ALL_SYMBOLS) {
+    const a = marketData[sym].analysis;
+    if (a && a.ready && a.score > 0) {
+      if (!best || a.score > best.score)
+        best = { symbol: sym, side: a.side, score: a.score, strength: a.strength };
+    }
+  }
+  return best;
+}
+
+function renderMarketTable() {
+  const tbody = document.getElementById('marketBody');
+  let html = '', bestSym = null, bestScore = 0;
+  for (const sym of ALL_SYMBOLS) {
+    const a = marketData[sym].analysis || { ticks:0, bias25:'—', hierarchy:'—', strength:0, ready:false };
+    if (a.ready && a.score > bestScore) { bestScore = a.score; bestSym = sym; }
+  }
+  for (const sym of ALL_SYMBOLS) {
+    const a = marketData[sym].analysis || { ticks:0, bias25:'—', hierarchy:'—', strength:0, ready:false };
+    const isBest = sym === bestSym;
+    const status = a.ready ? '<span class="good">READY</span>' : (a.ticks < 1000 ? 'Collecting…' : 'Waiting');
+    html += `<tr class="${isBest?'active':''}"><td>${sym}</td><td>${a.ticks}</td><td>${a.bias25}</td><td>${a.hierarchy}</td><td>${a.ready?(a.strength*100).toFixed(0)+'%':'—'}</td><td>${status}</td></tr>`;
+  }
+  tbody.innerHTML = html;
+  if (bestSym) document.getElementById('bestMarket').textContent = bestSym;
+}
+
+/* ─── Trading (New API) ─── */
+function sendTrade(obj) {
+  if (!tradeWs || tradeWs.readyState !== 1) return null;
+  const id = rid++;
+  obj.req_id = id;
+  try {
+    tradeWs.send(JSON.stringify(obj));
+  } catch (e) {
+    log('Send error: ' + e.message, 'error');
+    return null;
+  }
+  return id;
+}
+
+function placeTrade(symbol, contractType) {
+  if (pendingContract || !running || !authorized) return;
+  const stake = currentStake;
+  if (stake > balance * 0.95 && balance > 0) {
+    log('Stake too high relative to balance – skipping', 'warn');
+    return;
+  }
+  lastTradedSymbol = symbol;
+  pendingContract = true;
+  const duration = parseInt(document.getElementById('duration').value, 10) || 1;
+  document.getElementById('activeSignal').textContent = `${symbol} → ${contractType}`;
+  document.getElementById('bestMarket').textContent = symbol;
+  const strength = marketData[symbol].analysis ? (marketData[symbol].analysis.strength*100).toFixed(0) : '?';
+  log(`SIGNAL ${symbol} → ${contractType} | $${stake.toFixed(2)} | ${strength}%`, 'trade');
+
+  // New API uses underlying_symbol
+  sendTrade({
+    proposal: 1,
+    amount: stake,
+    basis: 'stake',
+    contract_type: contractType,
+    currency: currency,
+    duration: duration,
+    duration_unit: 't',
+    underlying_symbol: symbol
+  });
+}
+
+function onTradeMsg(ev) {
+  let msg;
+  try { msg = JSON.parse(ev.data); } catch(e) { return; }
+
+  if (msg.error) {
+    log('API: ' + (msg.error.message || JSON.stringify(msg.error)), 'error');
+    if (msg.msg_type === 'proposal' || (msg.echo_req && msg.echo_req.proposal)) {
+      pendingContract = false;
+    }
+    return;
+  }
+
+  if (msg.msg_type === 'balance' && msg.balance) {
+    balance = Number(msg.balance.balance);
+    currency = msg.balance.currency || currency;
+    document.getElementById('bal').textContent = `${balance.toFixed(2)} ${currency}`;
+    return;
+  }
+
+  if (msg.msg_type === 'proposal') {
+    if (!running || !pendingContract) return;
+    const pid = msg.proposal && msg.proposal.id;
+    const ask = msg.proposal && (msg.proposal.ask_price != null ? Number(msg.proposal.ask_price) : currentStake);
+    if (!pid) {
+      log('No proposal id', 'error');
+      pendingContract = false;
+      return;
+    }
+    sendTrade({ buy: pid, price: ask });
+    return;
+  }
+
+  if (msg.msg_type === 'buy') {
+    if (!msg.buy) {
+      pendingContract = false;
+      return;
+    }
+    openContractId = msg.buy.contract_id;
+    log(`BOUGHT ${lastTradedSymbol} → #${openContractId} | Stake $${currentStake.toFixed(2)}`, 'trade');
+    sendTrade({ proposal_open_contract: 1, contract_id: openContractId, subscribe: 1 });
+    return;
+  }
+
+  if (msg.msg_type === 'proposal_open_contract') {
+    const poc = msg.proposal_open_contract;
+    if (!poc || !poc.is_sold) return;
+    const profit = parseFloat(poc.profit) || 0;
+    sessionPnl += profit;
+    tradeCount++;
+    if (profit >= 0) {
+      log(`WIN +${profit.toFixed(2)} on ${lastTradedSymbol} | Session: ${sessionPnl.toFixed(2)}`, 'success');
+      currentStake = parseFloat(document.getElementById('baseStake').value);
+    } else {
+      log(`LOSS ${profit.toFixed(2)} on ${lastTradedSymbol} | Session: ${sessionPnl.toFixed(2)}`, 'error');
+      currentStake = +(currentStake * parseFloat(document.getElementById('martingale').value)).toFixed(2);
+    }
+    updateUI();
+    pendingContract = false;
+    openContractId = null;
+
+    const tp = parseFloat(document.getElementById('tp').value);
+    const sl = parseFloat(document.getElementById('sl').value);
+    const maxT = parseInt(document.getElementById('maxTrades').value, 10);
+    if (sessionPnl >= tp) { log(`🎉 TAKE PROFIT (+${sessionPnl.toFixed(2)}). Stopped.`, 'success'); stopBot(); }
+    else if (sessionPnl <= -sl) { log(`🛑 STOP LOSS (${sessionPnl.toFixed(2)}). Stopped.`, 'error'); stopBot(); }
+    else if (tradeCount >= maxT) { log(`Max trades reached. Stopped.`, 'warn'); stopBot(); }
+  }
+}
+
+function openTradeWs(url) {
+  clearTimeout(tradeTimer);
+  if (tradeWs) {
+    try { tradeWs.onclose = null; tradeWs.close(); } catch(e){}
+    tradeWs = null;
+  }
+  log('Trade WS opening…', 'info');
+  setTradeStatus('Connecting…');
+
+  try {
+    tradeWs = new WebSocket(url);
+  } catch (e) {
+    log('Trade WS create error: ' + e.message, 'error');
+    scheduleTradeReconnect(null);
+    return;
+  }
+
+  tradeWs.onopen = () => {
+    tradeBackoff = 2000;
+    authorized = true;
+    setTradeStatus('● Connected');
+    document.getElementById('btnConnect').disabled = true;
+    document.getElementById('btnDisconnect').disabled = false;
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('authStatus').innerHTML = `<span class="badge badge-connected">Connected (${loginId})</span>`;
+    log('Trade WS OPEN – authorized via OTP', 'success');
+    sendTrade({ balance: 1, subscribe: 1 });
+    // keep-alive
+    if (tradeWs._ping) clearInterval(tradeWs._ping);
+    tradeWs._ping = setInterval(() => {
+      if (tradeWs && tradeWs.readyState === 1) {
+        try { tradeWs.send(JSON.stringify({ ping: 1, req_id: rid++ })); } catch(e){}
+      }
+    }, 30000);
+  };
+
+  tradeWs.onmessage = onTradeMsg;
+
+  tradeWs.onerror = () => log('Trade WS error', 'error');
+
+  tradeWs.onclose = (ev) => {
+    authorized = false;
+    if (tradeWs && tradeWs._ping) clearInterval(tradeWs._ping);
+    setTradeStatus('Disconnected');
+    document.getElementById('btnConnect').disabled = false;
+    document.getElementById('btnDisconnect').disabled = true;
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('authStatus').innerHTML = '<span class="badge badge-disconnected">Not connected</span>';
+    log('Trade WS closed ' + (ev.code||''), 'warn');
+    if (!closing && loginId && token) {
+      scheduleTradeReconnect(null);
+    }
+  };
+}
+
+function scheduleTradeReconnect(cachedUrl) {
+  clearTimeout(tradeTimer);
+  const delay = tradeBackoff;
+  tradeBackoff = Math.min(tradeBackoff * 1.6, 20000);
+  setTradeStatus('Retry in ' + Math.round(delay/1000) + 's');
+  tradeTimer = setTimeout(() => {
+    if (cachedUrl) openTradeWs(cachedUrl);
+    else reconnectTrade();
+  }, delay);
+}
+
+function reconnectTrade() {
+  if (!token || !loginId || !appId) {
+    setTradeStatus('Need re-login');
+    return;
+  }
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Deriv-App-ID': appId,
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+  };
+  log('Re-auth OTP…', 'info');
+  fetch(REST + '/accounts/' + encodeURIComponent(loginId) + '/otp', {
+    method: 'POST',
+    headers: headers
+  })
+  .then(r => r.json())
+  .then(json => {
+    const wsUrl = (json.data && json.data.url) || json.url;
+    if (wsUrl) openTradeWs(wsUrl);
+    else {
+      log('Re-auth failed – no url', 'error');
+      scheduleTradeReconnect(null);
+    }
+  })
+  .catch(e => {
+    log('Re-auth error: ' + e.message, 'error');
+    scheduleTradeReconnect(null);
+  });
+}
+
+/* ─── Connect / Disconnect ─── */
+function connectAccount() {
+  token = document.getElementById('apiToken').value.trim();
+  appId = document.getElementById('appId').value.trim() || '34ICfs977CxpmvNDBbpHj';
+  if (!token || token.length < 20) {
+    log('Please paste a valid PAT token (pat_…)', 'error');
+    return;
+  }
+  localStorage.setItem('deriv_pat', token);
+  localStorage.setItem('deriv_app_id_new', appId);
+
+  document.getElementById('btnConnect').disabled = true;
+  setTradeStatus('Fetching accounts…');
+  log('Fetching accounts…', 'info');
+
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Deriv-App-ID': appId,
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+  };
+
+  fetch(REST + '/accounts', { method: 'GET', headers })
+    .then(res => res.text().then(text => {
+      if (!res.ok) {
+        log('Accounts HTTP ' + res.status + ': ' + text.slice(0, 200), 'error');
+        setTradeStatus('Auth ' + res.status);
+        document.getElementById('btnConnect').disabled = false;
+        alert('Accounts failed HTTP ' + res.status + '\nCheck token scopes (need trade) and App ID.');
+        return null;
+      }
+      let json;
+      try { json = JSON.parse(text); } catch(e) {
+        log('Invalid JSON from accounts', 'error');
+        document.getElementById('btnConnect').disabled = false;
+        return null;
+      }
+      const accounts = Array.isArray(json.data) ? json.data : [];
+      log('Accounts: ' + accounts.map(a => (a.account_id || a.loginid) + '(' + (a.account_type||'') + ')').join(', '), 'info');
+      let demo = accounts.find(a => (a.account_type || '').toLowerCase() === 'demo');
+      if (!demo) demo = accounts[0];
+      if (!demo) {
+        log('No account found on this PAT', 'error');
+        setTradeStatus('No account');
+        document.getElementById('btnConnect').disabled = false;
+        return null;
+      }
+      loginId = demo.account_id || demo.loginid;
+      currency = demo.currency || 'USD';
+      balance = Number(demo.balance) || 0;
+      document.getElementById('bal').textContent = `${balance.toFixed(2)} ${currency}`;
+      log('Using account ' + loginId, 'success');
+      setTradeStatus('Requesting OTP…');
+      return fetch(REST + '/accounts/' + encodeURIComponent(loginId) + '/otp', {
+        method: 'POST',
+        headers
+      }).then(otpRes => otpRes.text().then(otpText => {
+        if (!otpRes.ok) {
+          log('OTP HTTP ' + otpRes.status + ': ' + otpText.slice(0, 200), 'error');
+          setTradeStatus('OTP ' + otpRes.status);
+          document.getElementById('btnConnect').disabled = false;
+          alert('OTP failed HTTP ' + otpRes.status);
+          return;
+        }
+        let otpJson;
+        try { otpJson = JSON.parse(otpText); } catch(e) {
+          log('Invalid OTP response', 'error');
+          document.getElementById('btnConnect').disabled = false;
+          return;
+        }
+        const wsUrl = (otpJson.data && otpJson.data.url) || otpJson.url;
+        if (!wsUrl) {
+          log('No WebSocket URL in OTP response', 'error');
+          setTradeStatus('No url');
+          document.getElementById('btnConnect').disabled = false;
+          return;
+        }
+        openTradeWs(wsUrl);
+      }));
+    }))
+    .catch(e => {
+      log('FETCH ERROR: ' + e.message, 'error');
+      setTradeStatus('Fetch failed');
+      document.getElementById('btnConnect').disabled = false;
+      alert('Network error: ' + e.message);
+    });
+}
+
+function disconnect() {
+  log('Disconnect', 'warn');
+  closing = true;
+  stopBot();
+  clearTimeout(tradeTimer);
+  if (tradeWs) {
+    if (tradeWs._ping) clearInterval(tradeWs._ping);
+    try { tradeWs.close(); } catch(e){}
+  }
+  tradeWs = null;
+  authorized = false;
+  loginId = '';
+  pendingContract = false;
+  openContractId = null;
+  setTradeStatus('Not connected');
+  document.getElementById('bal').textContent = '—';
+  document.getElementById('authStatus').innerHTML = '<span class="badge badge-disconnected">Not connected</span>';
+  document.getElementById('btnConnect').disabled = false;
+  document.getElementById('btnDisconnect').disabled = true;
+  document.getElementById('btnStart').disabled = true;
+  closing = false;
+}
+
+/* ─── Bot control ─── */
+function startBot() {
+  if (!authorized) { log('Connect first', 'error'); return; }
+  sessionPnl = 0;
+  tradeCount = 0;
+  currentStake = parseFloat(document.getElementById('baseStake').value) || 0.5;
+  pendingContract = false;
+  running = true;
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+  updateUI();
+  log('▶ Bot started – scanning for strongest hierarchy', 'success');
+}
+
+function stopBot() {
+  running = false;
+  pendingContract = false;
+  document.getElementById('btnStart').disabled = !authorized;
+  document.getElementById('btnStop').disabled = true;
+  document.getElementById('activeSignal').textContent = '—';
+  log('⏹ Bot stopped', 'warn');
+}
+
+function updateUI() {
+  document.getElementById('sessionPnl').textContent = `$${sessionPnl.toFixed(2)}`;
+  document.getElementById('sessionPnl').className = sessionPnl >= 0 ? 'green' : 'red';
+  document.getElementById('curStake').textContent = `$${currentStake.toFixed(2)}`;
+  document.getElementById('tradeCount').textContent = tradeCount;
+}
+
+/* ─── Boot ─── */
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('deriv_pat');
+  const savedApp = localStorage.getItem('deriv_app_id_new');
+  if (savedApp) document.getElementById('appId').value = savedApp;
+  if (saved) {
+    document.getElementById('apiToken').value = saved;
+    log('Saved PAT found. Click Connect Account.', 'info');
+  }
+  // Pre-fill the token/app you provided for convenience (you can clear if desired)
+  if (!saved) {
+    document.getElementById('apiToken').value = 'pat_8245d53388ea4de46ed65f55564269fbc0924cd5e888590f1cce18f1b86b676d';
+    document.getElementById('appId').value = '34ICfs977CxpmvNDBbpHj';
+  }
+  renderMarketTable();
+  log('Ready. Data feed starting… Paste PAT if needed and click Connect Account.', 'info');
+  connectData();
+});
+
+window.addEventListener('beforeunload', () => {
+  closing = true;
+  clearTimeout(dataTimer);
+  clearTimeout(tradeTimer);
+  if (dataWs) try { dataWs.close(); } catch(e){}
+  if (tradeWs) {
+    if (tradeWs._ping) clearInterval(tradeWs._ping);
+    try { tradeWs.close(); } catch(e){}
+  }
+});
+</script>
+</body>
+</html>
